@@ -1,8 +1,10 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <WebServer.h>
+#include <SPIFFS.h>
 
 #include "md4c-html.h"
+#include "content_parser.h"
 
 const char* ssid = "EduBridge";  // Name of the WiFi
 const char* password = "";       // No password for open access (or set one if preferred)
@@ -11,6 +13,7 @@ const byte DNS_PORT = 53;
 IPAddress apIP(192, 168, 4, 1); // The default IP for ESP AP
 DNSServer dnsServer;
 WebServer server(80);
+ContentParser contentParser;
 
 String html = "";
 
@@ -135,14 +138,25 @@ const char index_html[] PROGMEM = R"rawliteral(
 void setup() {
   Serial.begin(115200);
   
+  // Initialize content parser and load modules
+  Serial.println("Initializing content parser...");
+  if (contentParser.initialize()) {
+    contentParser.loadModules();
+    
+    // Print loaded modules info
+    for (int i = 0; i < contentParser.getModuleCount(); i++) {
+      contentParser.printModuleInfo(i);
+    }
+  } else {
+    Serial.println("Failed to initialize content parser");
+  }
+  
   // 1. Set up the Access Point
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password); // If password is "", it is an open network
   
   // Wait a moment for AP to start
   delay(100);
-  
-  convertMarkdownToHtml("# Admin view");
   
   Serial.println("Access Point Started");
   Serial.print("SSID: "); Serial.println(ssid);
@@ -155,16 +169,145 @@ void setup() {
 
   // 3. Setup Web Server Handlers
   
-  // Serve the quiz on the root path
+  // Serve module list on root path
   server.on("/", []() {
-    if server.hasArg("module") {
-      String id = server.arg("module");
-      server.send(200, "text/plain", "Got id: " id);
+    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<style>body{font-family:Arial;padding:20px;background:#f4f4f9;}";
+    html += ".module{background:white;padding:15px;margin:10px 0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}";
+    html += "a{text-decoration:none;color:#27ae60;font-weight:bold;}</style></head><body>";
+    html += "<h1>EduBridge - Available Modules</h1>";
+    
+    for (int i = 0; i < contentParser.getModuleCount(); i++) {
+      Module* mod = contentParser.getModule(i);
+      if (mod && mod->isValid) {
+        html += "<div class='module'>";
+        html += "<h2>" + mod->name + "</h2>";
+        html += "<p>Lessons: " + String(mod->lessonCount) + "</p>";
+        html += "<a href='/module?id=" + mod->id + "'>View Module</a>";
+        html += "</div>";
+      }
     }
-    server.send(200, "text/html", index_html);
+    
+    html += "</body></html>";
+    server.send(200, "text/html", html);
   });
-
-  server.on("/admin", []() {
+  
+  // Serve specific module with lessons
+  server.on("/module", []() {
+    if (!server.hasArg("id")) {
+      server.send(400, "text/plain", "Missing module id");
+      return;
+    }
+    
+    String moduleId = server.arg("id");
+    Module* mod = contentParser.getModuleById(moduleId);
+    
+    if (!mod || !mod->isValid) {
+      server.send(404, "text/plain", "Module not found");
+      return;
+    }
+    
+    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<style>body{font-family:Arial;padding:20px;background:#f4f4f9;}";
+    html += ".lesson{background:white;padding:15px;margin:10px 0;border-radius:8px;}";
+    html += "a{text-decoration:none;color:#27ae60;font-weight:bold;margin:0 10px;}</style></head><body>";
+    html += "<a href='/'>← Back to Modules</a>";
+    html += "<h1>" + mod->name + "</h1>";
+    
+    // List lessons
+    for (int i = 0; i < mod->lessonCount; i++) {
+      Lesson& lesson = mod->lessons[i];
+      if (lesson.isValid) {
+        html += "<div class='lesson'>";
+        html += "<h3>Lesson " + String(lesson.id) + ": " + lesson.title + "</h3>";
+        html += "<a href='/lesson?module=" + mod->id + "&lesson=" + String(lesson.id) + "'>View Lesson</a>";
+        html += "</div>";
+      }
+    }
+    
+    // Quiz link
+    if (mod->hasQuiz) {
+      html += "<div class='lesson'>";
+      html += "<h3>📝 Module Quiz</h3>";
+      html += "<p>" + String(mod->quizQuestionCount) + " questions</p>";
+      html += "<a href='/quiz?module=" + mod->id + "'>Take Quiz</a>";
+      html += "</div>";
+    }
+    
+    html += "</body></html>";
+    server.send(200, "text/html", html);
+  });
+  
+  // Serve specific lesson content
+  server.on("/lesson", []() {
+    if (!server.hasArg("module") || !server.hasArg("lesson")) {
+      server.send(400, "text/plain", "Missing parameters");
+      return;
+    }
+    
+    String moduleId = server.arg("module");
+    int lessonId = server.arg("lesson").toInt();
+    
+    Module* mod = contentParser.getModuleById(moduleId);
+    if (!mod || !mod->isValid) {
+      server.send(404, "text/plain", "Module not found");
+      return;
+    }
+    
+    Lesson* lesson = nullptr;
+    for (int i = 0; i < mod->lessonCount; i++) {
+      if (mod->lessons[i].id == lessonId) {
+        lesson = &mod->lessons[i];
+        break;
+      }
+    }
+    
+    if (!lesson || !lesson->isValid) {
+      server.send(404, "text/plain", "Lesson not found");
+      return;
+    }
+    
+    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<style>body{font-family:Arial;padding:20px;background:#f4f4f9;max-width:800px;margin:auto;}";
+    html += ".content{background:white;padding:20px;border-radius:8px;line-height:1.6;}";
+    html += "a{text-decoration:none;color:#27ae60;font-weight:bold;}</style></head><body>";
+    html += "<a href='/module?id=" + mod->id + "'>← Back to " + mod->name + "</a>";
+    html += "<div class='content'>";
+    html += lesson->content;
+    html += "</div>";
+    html += "</body></html>";
+    server.send(200, "text/html", html);
+  });
+  
+  // Serve quiz
+  server.on("/quiz", []() {
+    if (!server.hasArg("module")) {
+      server.send(400, "text/plain", "Missing module id");
+      return;
+    }
+    
+    String moduleId = server.arg("module");
+    Module* mod = contentParser.getModuleById(moduleId);
+    
+    if (!mod || !mod->isValid || !mod->hasQuiz) {
+      server.send(404, "text/plain", "Quiz not found");
+      return;
+    }
+    
+    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>";
+    html += "<style>body{font-family:Arial;padding:20px;background:#f4f4f9;max-width:800px;margin:auto;}";
+    html += ".quiz{background:white;padding:20px;border-radius:8px;}";
+    html += ".question{margin:20px 0;padding:15px;background:#f9f9f9;border-left:4px solid #27ae60;}";
+    html += "button{background:#27ae60;color:white;padding:12px 30px;border:none;border-radius:5px;cursor:pointer;font-size:16px;}";
+    html += "button:hover{background:#219150;}";
+    html += "#result{margin-top:20px;padding:15px;border-radius:5px;font-weight:bold;font-size:1.2em;}";
+    html += "a{text-decoration:none;color:#27ae60;font-weight:bold;}</style></head><body>";
+    html += "<a href='/module?id=" + mod->id + "'>← Back to " + mod->name + "</a>";
+    html += "<div class='quiz'>";
+    html += "<h1>" + mod->name + " - Quiz</h1>";
+    html += contentParser.generateQuizHtml(*mod);
+    html += "</div>";
+    html += "</body></html>";
     server.send(200, "text/html", html);
   });
 
