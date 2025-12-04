@@ -142,7 +142,7 @@ void setup() {
   // Wait a moment for AP to start
   delay(100);
   
-  convertMarkdownToHtml("# Hello World\n## Subheading\n\nThis is markdown!");
+  convertMarkdownToHtml("# Admin view");
   Serial.println(html.c_str());
   
   Serial.println("Access Point Started");
@@ -160,6 +160,11 @@ void setup() {
   server.on("/", []() {
     server.send(200, "text/html", index_html);
   });
+
+  server.on("/admin", []() {
+    server.send(200, "text/html", html);
+  });
+
 
   // AND Serve the quiz on ANY unknown path (This is the Captive Portal trick)
   // When a phone checks "connectivitycheck.gstatic.com", we send them the quiz instead.
