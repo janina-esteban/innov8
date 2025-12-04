@@ -134,7 +134,6 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(html);
   
   // 1. Set up the Access Point
   WiFi.mode(WIFI_AP);
@@ -142,6 +141,9 @@ void setup() {
   
   // Wait a moment for AP to start
   delay(100);
+  
+  convertMarkdownToHtml("# Hello World\n## Subheading\n\nThis is markdown!");
+  Serial.println(html);
   
   Serial.println("Access Point Started");
   Serial.print("SSID: "); Serial.println(ssid);
