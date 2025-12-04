@@ -44,8 +44,6 @@ void convertMarkdownToHtml(const char* markdown) {
   }
 }
 
-Serial.println(html);
-
 // --- The HTML/JS Quiz Content ---
 // We store the HTML in a raw string literal for easy editing
 const char index_html[] PROGMEM = R"rawliteral(
@@ -136,6 +134,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 void setup() {
   Serial.begin(115200);
+  Serial.println(html);
   
   // 1. Set up the Access Point
   WiFi.mode(WIFI_AP);
