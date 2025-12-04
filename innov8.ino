@@ -143,7 +143,7 @@ void setup() {
   delay(100);
   
   convertMarkdownToHtml("# Hello World\n## Subheading\n\nThis is markdown!");
-  Serial.println(html);
+  Serial.println(html.c_str());
   
   Serial.println("Access Point Started");
   Serial.print("SSID: "); Serial.println(ssid);
