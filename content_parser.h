@@ -208,23 +208,77 @@ public:
     }
     
     Serial.println("SPIFFS mounted successfully");
+    
+    // List all files for debugging
+    Serial.println("Listing all files in SPIFFS:");
+    File root = SPIFFS.open("/");
+    listDir(root, 0);
+    
     return true;
+  }
+  
+  // Helper function to list directory contents (for debugging)
+  void listDir(File dir, int level) {
+    while (true) {
+      File entry = dir.openNextFile();
+      if (!entry) break;
+      
+      for (int i = 0; i < level; i++) Serial.print("  ");
+      Serial.print(entry.name());
+      if (entry.isDirectory()) {
+        Serial.println("/");
+        listDir(entry, level + 1);
+      } else {
+        Serial.print(" - ");
+        Serial.print(entry.size());
+        Serial.println(" bytes");
+      }
+      entry.close();
+    }
   }
   
   // Load all modules from /storage directory
   void loadModules() {
+    Serial.println("Starting to load modules...");
+    
+    // Check if /storage exists
+    if (!SPIFFS.exists("/storage")) {
+      Serial.println("ERROR: /storage directory does not exist!");
+      Serial.println("Trying to scan root for module directories...");
+      scanRootForModules();
+      return;
+    }
+    
     File root = SPIFFS.open("/storage");
-    if (!root || !root.isDirectory()) {
+    if (!root) {
       Serial.println("Failed to open /storage directory");
       return;
     }
     
-    moduleCount = 0;
-    File moduleDir = root.openNextFile();
+    if (!root.isDirectory()) {
+      Serial.println("/storage is not a directory!");
+      return;
+    }
     
-    while (moduleDir && moduleCount < MAX_MODULES) {
+    Serial.println("/storage opened successfully");
+    moduleCount = 0;
+    
+    // Scan for subdirectories in /storage
+    while (moduleCount < MAX_MODULES) {
+      File moduleDir = root.openNextFile();
+      if (!moduleDir) {
+        Serial.println("No more files in /storage");
+        break;
+      }
+      
+      String fullPath = String(moduleDir.name());
+      Serial.print("Found: ");
+      Serial.print(fullPath);
+      Serial.print(" - isDir: ");
+      Serial.println(moduleDir.isDirectory() ? "YES" : "NO");
+      
       if (moduleDir.isDirectory()) {
-        String dirName = String(moduleDir.name());
+        String dirName = fullPath;
         // Remove "/storage/" prefix if present
         if (dirName.startsWith("/storage/")) {
           dirName = dirName.substring(9);
@@ -242,32 +296,112 @@ public:
         loadModuleContent(dirName, currentModule);
         
         if (currentModule.lessonCount > 0 || currentModule.hasQuiz) {
+          Serial.print("Module loaded successfully with ");
+          Serial.print(currentModule.lessonCount);
+          Serial.println(" lessons");
+          moduleCount++;
+        } else {
+          Serial.println("Module had no content, skipping");
+        }
+      }
+      moduleDir.close();
+    }
+    
+    Serial.print("Total modules loaded: ");
+    Serial.println(moduleCount);
+  }
+  
+  // Alternative: Scan root directory for module folders
+  void scanRootForModules() {
+    Serial.println("Scanning root directory for modules...");
+    File root = SPIFFS.open("/");
+    
+    moduleCount = 0;
+    while (moduleCount < MAX_MODULES) {
+      File entry = root.openNextFile();
+      if (!entry) break;
+      
+      String name = String(entry.name());
+      Serial.print("Checking: ");
+      Serial.println(name);
+      
+      // Skip if it starts with /storage (we already checked that)
+      if (name.startsWith("/storage")) {
+        entry.close();
+        continue;
+      }
+      
+      // Look for directories that might be modules
+      if (entry.isDirectory()) {
+        String dirName = name;
+        if (dirName.startsWith("/")) dirName = dirName.substring(1);
+        
+        // Check if this directory has .content or .quiz files
+        Serial.print("Potential module: ");
+        Serial.println(dirName);
+        
+        Module& currentModule = modules[moduleCount];
+        currentModule.id = dirName;
+        currentModule.name = toTitleCase(dirName);
+        currentModule.isValid = true;
+        
+        loadModuleContent(dirName, currentModule);
+        
+        if (currentModule.lessonCount > 0 || currentModule.hasQuiz) {
+          Serial.print("Found module with content: ");
+          Serial.println(dirName);
           moduleCount++;
         }
       }
-      moduleDir = root.openNextFile();
+      entry.close();
     }
-    
-    Serial.print("Loaded ");
-    Serial.print(moduleCount);
-    Serial.println(" modules");
   }
   
   // Load content for a specific module
   void loadModuleContent(const String& moduleId, Module& module) {
-    String modulePath = "/storage/" + moduleId;
-    File moduleDir = SPIFFS.open(modulePath);
+    // Try multiple path variations
+    String paths[] = {
+      "/storage/" + moduleId,
+      "/" + moduleId,
+      moduleId
+    };
     
-    if (!moduleDir || !moduleDir.isDirectory()) {
-      Serial.println("Module directory not found: " + modulePath);
+    File moduleDir;
+    String workingPath = "";
+    
+    for (int i = 0; i < 3; i++) {
+      Serial.print("Trying path: ");
+      Serial.println(paths[i]);
+      
+      if (SPIFFS.exists(paths[i])) {
+        moduleDir = SPIFFS.open(paths[i]);
+        if (moduleDir && moduleDir.isDirectory()) {
+          workingPath = paths[i];
+          Serial.print("Successfully opened: ");
+          Serial.println(workingPath);
+          break;
+        }
+        if (moduleDir) moduleDir.close();
+      }
+    }
+    
+    if (workingPath.length() == 0) {
+      Serial.println("Module directory not found for: " + moduleId);
       return;
     }
     
     module.lessonCount = 0;
-    File file = moduleDir.openNextFile();
     
-    while (file) {
-      String fileName = String(file.name());
+    while (true) {
+      File file = moduleDir.openNextFile();
+      if (!file) {
+        Serial.println("  No more files in module directory");
+        break;
+      }
+      
+      String fullPath = String(file.name());
+      String fileName = fullPath;
+      
       // Get just the filename without path
       int lastSlash = fileName.lastIndexOf('/');
       if (lastSlash != -1) {
@@ -275,7 +409,12 @@ public:
       }
       
       Serial.print("  Found file: ");
-      Serial.println(fileName);
+      Serial.print(fileName);
+      Serial.print(" (full path: ");
+      Serial.print(fullPath);
+      Serial.print(", size: ");
+      Serial.print(file.size());
+      Serial.println(" bytes)");
       
       if (fileName.endsWith(".content")) {
         // This is a lesson file
@@ -284,9 +423,16 @@ public:
           
           // Read file content
           String content = "";
+          size_t fileSize = file.size();
+          content.reserve(fileSize + 1);
+          
           while (file.available()) {
             content += (char)file.read();
           }
+          
+          Serial.print("    Read ");
+          Serial.print(content.length());
+          Serial.println(" characters");
           
           lesson.id = extractLessonId(fileName);
           lesson.title = extractTitle(content);
@@ -303,9 +449,16 @@ public:
       } else if (fileName.endsWith(".quiz")) {
         // This is a quiz file
         String quizContent = "";
+        size_t fileSize = file.size();
+        quizContent.reserve(fileSize + 1);
+        
         while (file.available()) {
           quizContent += (char)file.read();
         }
+        
+        Serial.print("    Read ");
+        Serial.print(quizContent.length());
+        Serial.println(" characters from quiz");
         
         parseQuizFile(quizContent, module);
         
@@ -314,8 +467,10 @@ public:
         Serial.println(" questions");
       }
       
-      file = moduleDir.openNextFile();
+      file.close();
     }
+    
+    moduleDir.close();
   }
   
   // Getters
