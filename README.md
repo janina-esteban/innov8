@@ -10,6 +10,7 @@ This whole project is based on **PlatformIO** in VS Code. We use a flat file sys
 
 ## ✏️ Part 1: Adding New Lessons & Quizzes
 We can't use regular folders (like `math/` or `filipino/`) because the ESP32 loses the folder names when uploading. Instead, we use the **filename** to group things.
+
 ### 1\. The Naming Formula (THE MOST IMPORTANT RULE\!)
 Every file must follow this exact pattern, separated by an underscore (`_`):
 
@@ -22,7 +23,7 @@ Every file must follow this exact pattern, separated by an underscore (`_`):
 
 ### 2\. Where to Put the Files
   * Put **ALL** lesson and quiz files directly inside the **`data/`** folder. Don't put them in subfolders like `data/math/`.
-  * 
+
 ### 3\. Writing Lesson Content
   * Use a `.content` or `.md` file.
   * You can use simple Markdown like `# Heading`, `**bold**`, and `*italics*`.
