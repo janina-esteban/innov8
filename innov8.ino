@@ -2,6 +2,8 @@
 #include <DNSServer.h>
 #include <WebServer.h>
 
+#include "md4c-html.h"
+
 const char* ssid = "EduBridge";  // Name of the WiFi
 const char* password = "";       // No password for open access (or set one if preferred)
 
@@ -9,6 +11,40 @@ const byte DNS_PORT = 53;
 IPAddress apIP(192, 168, 4, 1); // The default IP for ESP AP
 DNSServer dnsServer;
 WebServer server(80);
+
+String html = "";
+
+// Callback function to process md4c HTML output
+void process_output(const MD_CHAR* text, MD_SIZE size, void* userdata) {
+  // Cast userdata back to String pointer
+  String* output = (String*)userdata;
+  
+  // Append the text chunk to the output string
+  for (MD_SIZE i = 0; i < size; i++) {
+    *output += text[i];
+  }
+}
+
+void convertMarkdownToHtml(const char* markdown) {
+  html = ""; // Clear previous content
+  
+  // Call md_html with our callback function
+  // The &html is passed as userdata so the callback can append to it
+  int result = md_html(
+    markdown,                    // input markdown text
+    strlen(markdown),            // input size
+    process_output,              // callback function
+    &html,                       // userdata (pointer to our html String)
+    0,                          // parser_flags (0 for default)
+    0                           // renderer_flags (0 for default)
+  );
+  
+  if (result != 0) {
+    Serial.println("Error converting markdown to HTML");
+  }
+}
+
+Serial.println(html);
 
 // --- The HTML/JS Quiz Content ---
 // We store the HTML in a raw string literal for easy editing
