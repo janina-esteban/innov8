@@ -143,7 +143,6 @@ void setup() {
   delay(100);
   
   convertMarkdownToHtml("# Admin view");
-  Serial.println(html.c_str());
   
   Serial.println("Access Point Started");
   Serial.print("SSID: "); Serial.println(ssid);
@@ -158,6 +157,10 @@ void setup() {
   
   // Serve the quiz on the root path
   server.on("/", []() {
+    if server.hasArg("module") {
+      String id = server.arg("module");
+      server.send(200, "text/plain", "Got id: " id);
+    }
     server.send(200, "text/html", index_html);
   });
 
