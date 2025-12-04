@@ -1,4 +1,4 @@
-# 🧑‍💻 EduBridge Project: How To Collaborate\! 📚
+# 🧑‍💻 EduBridge by WON 📚
 ## 📌 Project Goals & Setup
 
 This whole project is based on **PlatformIO** in VS Code. We use a flat file system (SPIFFS) which is weird, so we have to stick to the naming rules below.
@@ -9,11 +9,8 @@ This whole project is based on **PlatformIO** in VS Code. We use a flat file sys
 -----
 
 ## ✏️ Part 1: Adding New Lessons & Quizzes
-
 We can't use regular folders (like `math/` or `filipino/`) because the ESP32 loses the folder names when uploading. Instead, we use the **filename** to group things.
-
 ### 1\. The Naming Formula (THE MOST IMPORTANT RULE\!)
-
 Every file must follow this exact pattern, separated by an underscore (`_`):
 
 `[module_id]_[id].[title].[extension]`
@@ -24,16 +21,13 @@ Every file must follow this exact pattern, separated by an underscore (`_`):
 | **Filipino Quiz** | `filipino_module.quiz` | The code sees **`filipino`** and adds the quiz to that Module. |
 
 ### 2\. Where to Put the Files
-
   * Put **ALL** lesson and quiz files directly inside the **`data/`** folder. Don't put them in subfolders like `data/math/`.
-
+  * 
 ### 3\. Writing Lesson Content
-
   * Use a `.content` or `.md` file.
   * You can use simple Markdown like `# Heading`, `**bold**`, and `*italics*`.
 
 ### 4\. Writing Quizzes
-
   * Use a `.quiz` or `.txt` file.
   * Make sure you use the exact format for the questions and the answer key:
 
@@ -54,9 +48,7 @@ d) Palawan
 -----
 
 ## 🎨 Part 2: Changing the Look (CSS)
-
 If you want to change colors or fonts, you have to edit the C++ code directly.
-
 1.  Open **`src/main.cpp`**.
 2.  Search for the three main handler functions: `handleRoot()`, `handleModule()`, and `handleQuiz()`.
 3.  Inside those functions, find the line that contains `<style>`.
@@ -74,7 +66,6 @@ html += "<style>body{font-family:Arial;padding:20px;background:#E6F3FF;}";
 -----
 
 ## 🚀 Part 3: How to Upload Your Changes
-
 The most common reason for bugs is mixing up these two uploads. **You need to run them separately.**
 
 | If you changed... | You must run this task... | VS Code Status Bar Icon |
@@ -83,7 +74,6 @@ The most common reason for bugs is mixing up these two uploads. **You need to ru
 | **Code/CSS** (in `src/main.cpp`) | **Upload** | (Right Arrow →) |
 
 ### Upload Steps:
-
 1.  **Clean Cache:** Click the **Trash Can / Broom icon** in the bottom status bar first (good habit\!).
 2.  **Upload Data:** Run the **Upload Filesystem Image** task.
 3.  **Upload Code:** Run the **Upload** task.
